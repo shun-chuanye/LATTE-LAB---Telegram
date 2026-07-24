@@ -1,0 +1,735 @@
+(function () {
+  "use strict";
+
+  const config = window.LATTE_LAB_CONFIG || {};
+  const telegram = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  const currencyFormatters = {
+    USD: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }),
+    KHR: new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }),
+  };
+
+  const els = {
+    brandName: document.getElementById("brandName"),
+    searchInput: document.getElementById("searchInput"),
+    promoOnly: document.getElementById("promoOnly"),
+    categoryTabs: document.getElementById("categoryTabs"),
+    menuGrid: document.getElementById("menuGrid"),
+    dataStatus: document.getElementById("dataStatus"),
+    cartToggle: document.getElementById("cartToggle"),
+    cartClose: document.getElementById("cartClose"),
+    cartDrawer: document.getElementById("cartDrawer"),
+    drawerBackdrop: document.getElementById("drawerBackdrop"),
+    cartCount: document.getElementById("cartCount"),
+    cartItems: document.getElementById("cartItems"),
+    checkoutForm: document.getElementById("checkoutForm"),
+    customerName: document.getElementById("customerName"),
+    addressField: document.getElementById("addressField"),
+    summaryItems: document.getElementById("summaryItems"),
+    summaryTotal: document.getElementById("summaryTotal"),
+    submitOrder: document.getElementById("submitOrder"),
+    submitNote: document.getElementById("submitNote"),
+    mobileCartBar: document.getElementById("mobileCartBar"),
+    mobileCartLabel: document.getElementById("mobileCartLabel"),
+    mobileCartTotal: document.getElementById("mobileCartTotal"),
+    toast: document.getElementById("toast"),
+  };
+
+  const state = {
+    products: [],
+    categories: ["All"],
+    activeCategory: "All",
+    query: "",
+    promoOnly: false,
+    currency: config.defaultCurrency || "USD",
+    imageFiles: [],
+    cart: new Map(),
+    submitting: false,
+  };
+
+  let toastTimer = null;
+  let supabaseClient = null;
+
+  init();
+
+  async function init() {
+    applyConfig();
+    initTelegram();
+    initSupabase();
+    bindEvents();
+    refreshIcons();
+
+    try {
+      state.imageFiles = await loadImageManifest();
+      state.products = await loadMenuFromExcel();
+      state.categories = ["All", ...unique(state.products.map((product) => product.type))];
+      els.dataStatus.textContent = `${state.products.length} drinks loaded from Excel.`;
+      render();
+    } catch (error) {
+      console.error(error);
+      els.dataStatus.textContent = "Could not load menu and price.xlsx. Check the file path and hosting.";
+      showToast("Menu failed to load");
+    }
+  }
+
+  async function loadImageManifest() {
+    try {
+      const response = await fetch(config.imageManifest || "image/manifest.json", { cache: "no-store" });
+      if (!response.ok) return [];
+      const files = await response.json();
+      return Array.isArray(files) ? files.filter(Boolean) : [];
+    } catch (error) {
+      console.warn("Image manifest unavailable", error);
+      return [];
+    }
+  }
+
+  function applyConfig() {
+    if (config.brandName) {
+      els.brandName.textContent = config.brandName;
+      document.title = `${config.brandName} Order`;
+    }
+  }
+
+  function initTelegram() {
+    if (!telegram) return;
+
+    telegram.ready();
+    telegram.expand();
+
+    const theme = telegram.themeParams || {};
+    if (theme.bg_color) document.documentElement.style.setProperty("--bg", theme.bg_color);
+    if (theme.text_color) document.documentElement.style.setProperty("--ink", theme.text_color);
+    if (theme.button_color) document.documentElement.style.setProperty("--brand", theme.button_color);
+    if (theme.hint_color) document.documentElement.style.setProperty("--muted", theme.hint_color);
+
+    const user = telegram.initDataUnsafe && telegram.initDataUnsafe.user;
+    if (user && !els.customerName.value) {
+      els.customerName.value = [user.first_name, user.last_name].filter(Boolean).join(" ");
+    }
+  }
+
+  function initSupabase() {
+    const hasConfig =
+      config.supabaseUrl &&
+      config.supabaseAnonKey &&
+      !config.supabaseUrl.includes("YOUR_") &&
+      !config.supabaseAnonKey.includes("YOUR_");
+
+    if (!hasConfig || !window.supabase) {
+      els.submitNote.textContent =
+        "Supabase is not configured yet. In Telegram, orders will be sent to the bot with WebApp.sendData.";
+      return;
+    }
+
+    supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    els.submitNote.textContent = "Orders will be saved to Supabase.";
+  }
+
+  function bindEvents() {
+    els.searchInput.addEventListener("input", (event) => {
+      state.query = event.target.value.trim().toLowerCase();
+      renderProducts();
+    });
+
+    els.promoOnly.addEventListener("change", (event) => {
+      state.promoOnly = event.target.checked;
+      renderProducts();
+    });
+
+    document.querySelectorAll("[data-currency]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.currency = button.dataset.currency;
+        document.querySelectorAll("[data-currency]").forEach((item) => {
+          item.classList.toggle("is-active", item.dataset.currency === state.currency);
+        });
+        renderProducts();
+        renderCart();
+      });
+    });
+
+    els.categoryTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-category]");
+      if (!button) return;
+      state.activeCategory = button.dataset.category;
+      renderCategories();
+      renderProducts();
+    });
+
+    els.menuGrid.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      updateQuantity(button.dataset.id, button.dataset.action);
+    });
+
+    els.cartItems.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      updateQuantity(button.dataset.id, button.dataset.action);
+    });
+
+    els.cartToggle.addEventListener("click", openCart);
+    els.mobileCartBar.addEventListener("click", openCart);
+    els.cartClose.addEventListener("click", closeCart);
+    els.drawerBackdrop.addEventListener("click", closeCart);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeCart();
+    });
+
+    els.checkoutForm.addEventListener("change", updateAddressLabel);
+    els.checkoutForm.addEventListener("submit", submitOrder);
+  }
+
+  async function loadMenuFromExcel() {
+    if (!window.XLSX) throw new Error("SheetJS failed to load.");
+
+    const menuFile = config.menuFile || "menu and price.xlsx";
+    const response = await fetch(encodeURI(menuFile), { cache: "no-store" });
+    if (!response.ok) throw new Error(`Menu fetch failed: ${response.status}`);
+
+    const data = await response.arrayBuffer();
+    const workbook = window.XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    return normalizeRows(rows);
+  }
+
+  function normalizeRows(rows) {
+    const headerIndex = rows.findIndex((row) => {
+      const labels = row.map((value) => normalizeLabel(value));
+      return labels.includes("name") && labels.includes("type");
+    });
+    if (headerIndex < 0) throw new Error("Could not find menu header row.");
+
+    const headers = rows[headerIndex].map((value) => normalizeLabel(value));
+    const col = (...names) => {
+      const normalized = names.map(normalizeLabel);
+      return headers.findIndex((header) => normalized.includes(header));
+    };
+
+    const indexes = {
+      no: col("no"),
+      type: col("type", "category"),
+      name: col("name"),
+      khmer: col("khmer"),
+      listPriceUsd: col("price"),
+      shopPriceUsd: col("shop price $", "shop price usd"),
+      shopPriceKhr: col("shop price ៛", "shop price khr"),
+      promotion: col("promotion", "promo"),
+    };
+
+    return rows
+      .slice(headerIndex + 1)
+      .map((row, offset) => rowToProduct(row, indexes, offset))
+      .filter(Boolean);
+  }
+
+  function rowToProduct(row, indexes, offset) {
+    const name = cell(row, indexes.name);
+    const type = cell(row, indexes.type);
+    if (!name || !type) return null;
+
+    const no = Number(cell(row, indexes.no)) || offset + 1;
+    const listPriceUsd = numberCell(row, indexes.listPriceUsd);
+    const priceUsd = numberCell(row, indexes.shopPriceUsd) || listPriceUsd || 0;
+    const priceKhr = Math.round(numberCell(row, indexes.shopPriceKhr) || priceUsd * 4000);
+    const promotion = Boolean(cell(row, indexes.promotion));
+
+    return {
+      id: `${no}-${slugify(name)}`,
+      no,
+      type,
+      name,
+      khmer: cell(row, indexes.khmer),
+      listPriceUsd,
+      priceUsd,
+      priceKhr,
+      promotion,
+      imageCandidates: imageCandidates(name),
+    };
+  }
+
+  function render() {
+    renderCategories();
+    renderProducts();
+    renderCart();
+    updateAddressLabel();
+  }
+
+  function renderCategories() {
+    els.categoryTabs.replaceChildren(
+      ...state.categories.map((category) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `category-tab${category === state.activeCategory ? " is-active" : ""}`;
+        button.dataset.category = category;
+        button.textContent = category;
+        return button;
+      }),
+    );
+  }
+
+  function renderProducts() {
+    const products = filteredProducts();
+    els.menuGrid.replaceChildren(...products.map(renderProductCard));
+    if (!products.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-cart";
+      empty.textContent = "No drinks match this search.";
+      els.menuGrid.append(empty);
+    }
+    refreshIcons();
+  }
+
+  function renderProductCard(product) {
+    const item = state.cart.get(product.id);
+    const quantity = item ? item.quantity : 0;
+    const card = document.createElement("article");
+    card.className = "product-card";
+
+    const media = document.createElement("div");
+    media.className = "product-media";
+    const image = document.createElement("img");
+    image.alt = product.name;
+    attachImageFallback(image, product.imageCandidates);
+    media.append(image);
+
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "badge-row";
+    badgeRow.append(makeBadge(product.type));
+    if (product.promotion) badgeRow.append(makeBadge("Promo", "promo"));
+    media.append(badgeRow);
+
+    const body = document.createElement("div");
+    body.className = "product-body";
+
+    const copy = document.createElement("div");
+    const title = document.createElement("h3");
+    title.className = "product-name";
+    title.textContent = product.name;
+    const khmer = document.createElement("p");
+    khmer.className = "product-khmer";
+    khmer.textContent = product.khmer || "";
+    copy.append(title, khmer);
+
+    const footer = document.createElement("div");
+    footer.className = "product-footer";
+
+    const price = document.createElement("div");
+    price.className = "price";
+    price.innerHTML = `<strong>${formatPrice(product)}</strong><small>${formatSecondaryPrice(product)}</small>`;
+
+    const control = document.createElement("div");
+    control.className = "quantity-control";
+    if (quantity > 0) {
+      control.append(
+        quantityButton(product.id, "decrease", "minus", "Remove one", "secondary"),
+        quantityValue(quantity),
+        quantityButton(product.id, "increase", "plus", "Add one"),
+      );
+    } else {
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "add-button";
+      add.dataset.action = "increase";
+      add.dataset.id = product.id;
+      add.innerHTML = '<i data-lucide="plus" aria-hidden="true"></i><span>Add</span>';
+      control.append(add);
+    }
+
+    footer.append(price, control);
+    body.append(copy, footer);
+    card.append(media, body);
+    return card;
+  }
+
+  function renderCart() {
+    const entries = cartEntries();
+    const totals = cartTotals(entries);
+
+    els.cartCount.textContent = String(totals.quantity);
+    els.summaryItems.textContent = String(totals.quantity);
+    els.summaryTotal.textContent = formatTotals(totals);
+    els.mobileCartLabel.textContent = totals.quantity
+      ? `${totals.quantity} item${totals.quantity === 1 ? "" : "s"} in cart`
+      : "Cart is empty";
+    els.mobileCartTotal.textContent = formatTotals(totals);
+    els.submitOrder.disabled = !entries.length || state.submitting;
+
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-cart";
+      empty.textContent = "Add drinks to start an order.";
+      els.cartItems.replaceChildren(empty);
+      refreshIcons();
+      return;
+    }
+
+    els.cartItems.replaceChildren(
+      ...entries.map(({ product, quantity }) => {
+        const line = document.createElement("div");
+        line.className = "cart-line";
+
+        const copy = document.createElement("div");
+        const title = document.createElement("h3");
+        title.textContent = product.name;
+        const detail = document.createElement("p");
+        detail.textContent = `${quantity} x ${formatPrice(product)}`;
+        copy.append(title, detail);
+
+        const side = document.createElement("div");
+        const linePrice = document.createElement("div");
+        linePrice.className = "line-price";
+        linePrice.textContent = formatLineTotal(product, quantity);
+        const control = document.createElement("div");
+        control.className = "quantity-control";
+        control.append(
+          quantityButton(product.id, "decrease", "minus", "Remove one", "secondary"),
+          quantityValue(quantity),
+          quantityButton(product.id, "increase", "plus", "Add one"),
+        );
+        side.append(linePrice, control);
+
+        line.append(copy, side);
+        return line;
+      }),
+    );
+    refreshIcons();
+  }
+
+  function filteredProducts() {
+    return state.products.filter((product) => {
+      const categoryMatch = state.activeCategory === "All" || product.type === state.activeCategory;
+      const promoMatch = !state.promoOnly || product.promotion;
+      const queryMatch =
+        !state.query ||
+        product.name.toLowerCase().includes(state.query) ||
+        product.type.toLowerCase().includes(state.query) ||
+        (product.khmer || "").toLowerCase().includes(state.query);
+      return categoryMatch && promoMatch && queryMatch;
+    });
+  }
+
+  function updateQuantity(productId, action) {
+    const product = state.products.find((item) => item.id === productId);
+    if (!product) return;
+
+    const current = state.cart.get(productId);
+    const nextQuantity =
+      action === "increase" ? (current ? current.quantity : 0) + 1 : (current ? current.quantity : 0) - 1;
+
+    if (nextQuantity <= 0) {
+      state.cart.delete(productId);
+    } else {
+      state.cart.set(productId, { product, quantity: Math.min(nextQuantity, 99) });
+    }
+
+    renderProducts();
+    renderCart();
+    telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred("light");
+  }
+
+  async function submitOrder(event) {
+    event.preventDefault();
+    const entries = cartEntries();
+    if (!entries.length || state.submitting) return;
+
+    const formData = new FormData(els.checkoutForm);
+    const fulfillment = formData.get("fulfillment_method") || "pickup";
+    const address = stringValue(formData.get("address"));
+    if (fulfillment === "delivery" && !address) {
+      showToast("Delivery address is required");
+      return;
+    }
+
+    const order = buildOrder(entries, formData);
+    setSubmitting(true);
+
+    try {
+      if (supabaseClient) {
+        const { error } = await supabaseClient.from("orders").insert(toSupabaseOrder(order));
+        if (error) throw error;
+        showOrderSuccess(order, "Saved to Supabase");
+      } else if (telegram && typeof telegram.sendData === "function") {
+        telegram.sendData(JSON.stringify({ type: "latte_lab_order", order }));
+        showOrderSuccess(order, "Sent to Telegram bot");
+      } else {
+        console.info("Demo order", order);
+        showOrderSuccess(order, "Demo order created");
+      }
+
+      state.cart.clear();
+      els.checkoutForm.reset();
+      const user = telegram && telegram.initDataUnsafe && telegram.initDataUnsafe.user;
+      if (user) els.customerName.value = [user.first_name, user.last_name].filter(Boolean).join(" ");
+      renderProducts();
+      renderCart();
+      updateAddressLabel();
+    } catch (error) {
+      console.error(error);
+      const message = error.message || "Order failed";
+      els.submitNote.textContent = message;
+      showToast(message);
+      telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred("error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function buildOrder(entries, formData) {
+    const totals = cartTotals(entries);
+    const telegramUser = telegram && telegram.initDataUnsafe ? telegram.initDataUnsafe.user || null : null;
+
+    return {
+      client_order_id: makeOrderId(),
+      created_at: new Date().toISOString(),
+      source: "telegram_web_app",
+      customer_name: stringValue(formData.get("customer_name")),
+      phone: stringValue(formData.get("phone")),
+      fulfillment_method: stringValue(formData.get("fulfillment_method")) || "pickup",
+      address: stringValue(formData.get("address")),
+      note: stringValue(formData.get("note")),
+      currency: state.currency,
+      subtotal_usd: totals.usd,
+      subtotal_khr: totals.khr,
+      item_count: totals.quantity,
+      items: entries.map(({ product, quantity }) => ({
+        product_id: product.id,
+        no: product.no,
+        type: product.type,
+        name: product.name,
+        khmer: product.khmer,
+        unit_price_usd: product.priceUsd,
+        unit_price_khr: product.priceKhr,
+        quantity,
+        line_total_usd: roundMoney(product.priceUsd * quantity),
+        line_total_khr: product.priceKhr * quantity,
+        promotion: product.promotion,
+      })),
+      telegram_user: telegramUser,
+    };
+  }
+
+  function toSupabaseOrder(order) {
+    const user = order.telegram_user || {};
+    return {
+      client_order_id: order.client_order_id,
+      source: order.source,
+      telegram_user_id: user.id ? String(user.id) : null,
+      telegram_username: user.username || null,
+      telegram_first_name: user.first_name || null,
+      telegram_last_name: user.last_name || null,
+      customer_name: order.customer_name || null,
+      phone: order.phone || null,
+      fulfillment_method: order.fulfillment_method,
+      address: order.address || null,
+      note: order.note || null,
+      currency: order.currency,
+      subtotal_usd: order.subtotal_usd,
+      subtotal_khr: order.subtotal_khr,
+      item_count: order.item_count,
+      items: order.items,
+      telegram_user: order.telegram_user,
+      raw_client: {
+        branch: config.branchName || null,
+        user_agent: navigator.userAgent,
+        app_platform: telegram ? telegram.platform : "browser",
+      },
+    };
+  }
+
+  function showOrderSuccess(order, prefix) {
+    els.submitNote.textContent = `${prefix}. Order ${order.client_order_id}`;
+    showToast(`Order ${order.client_order_id} placed`);
+    closeCart();
+    telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred("success");
+  }
+
+  function setSubmitting(value) {
+    state.submitting = value;
+    els.submitOrder.disabled = value || !cartEntries().length;
+    els.submitOrder.innerHTML = value
+      ? '<i data-lucide="loader-circle" aria-hidden="true"></i>Submitting...'
+      : '<i data-lucide="send" aria-hidden="true"></i>Place order';
+    refreshIcons();
+  }
+
+  function openCart() {
+    els.cartDrawer.classList.add("is-open");
+    els.cartDrawer.setAttribute("aria-hidden", "false");
+    els.drawerBackdrop.hidden = false;
+    if (telegram && telegram.BackButton) {
+      telegram.BackButton.show();
+      telegram.BackButton.onClick(closeCart);
+    }
+  }
+
+  function closeCart() {
+    els.cartDrawer.classList.remove("is-open");
+    els.cartDrawer.setAttribute("aria-hidden", "true");
+    els.drawerBackdrop.hidden = true;
+    if (telegram && telegram.BackButton) telegram.BackButton.hide();
+  }
+
+  function updateAddressLabel() {
+    const value = new FormData(els.checkoutForm).get("fulfillment_method");
+    els.addressField.firstChild.nodeValue = value === "delivery" ? "Delivery address" : "Address or table";
+  }
+
+  function cartEntries() {
+    return Array.from(state.cart.values());
+  }
+
+  function cartTotals(entries) {
+    return entries.reduce(
+      (totals, { product, quantity }) => ({
+        quantity: totals.quantity + quantity,
+        usd: roundMoney(totals.usd + product.priceUsd * quantity),
+        khr: totals.khr + product.priceKhr * quantity,
+      }),
+      { quantity: 0, usd: 0, khr: 0 },
+    );
+  }
+
+  function formatPrice(product) {
+    if (state.currency === "KHR") return `${currencyFormatters.KHR.format(product.priceKhr)} KHR`;
+    return currencyFormatters.USD.format(product.priceUsd);
+  }
+
+  function formatSecondaryPrice(product) {
+    if (state.currency === "KHR") return currencyFormatters.USD.format(product.priceUsd);
+    return `${currencyFormatters.KHR.format(product.priceKhr)} KHR`;
+  }
+
+  function formatLineTotal(product, quantity) {
+    if (state.currency === "KHR") return `${currencyFormatters.KHR.format(product.priceKhr * quantity)} KHR`;
+    return currencyFormatters.USD.format(roundMoney(product.priceUsd * quantity));
+  }
+
+  function formatTotals(totals) {
+    if (state.currency === "KHR") return `${currencyFormatters.KHR.format(totals.khr)} KHR`;
+    return currencyFormatters.USD.format(totals.usd);
+  }
+
+  function makeBadge(text, extraClass) {
+    const badge = document.createElement("span");
+    badge.className = `badge${extraClass ? ` ${extraClass}` : ""}`;
+    badge.textContent = text;
+    return badge;
+  }
+
+  function quantityButton(productId, action, icon, label, extraClass) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `qty-button${extraClass ? ` ${extraClass}` : ""}`;
+    button.dataset.id = productId;
+    button.dataset.action = action;
+    button.setAttribute("aria-label", label);
+    button.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`;
+    return button;
+  }
+
+  function quantityValue(quantity) {
+    const value = document.createElement("span");
+    value.className = "qty-value";
+    value.textContent = String(quantity);
+    return value;
+  }
+
+  function attachImageFallback(image, candidates) {
+    let index = 0;
+    image.onerror = () => {
+      index += 1;
+      if (index < candidates.length) {
+        image.src = candidates[index];
+      } else {
+        image.onerror = null;
+        image.src = "image/logo.JPG";
+        image.classList.add("is-fallback");
+      }
+    };
+    image.src = candidates[0] || "image/logo.JPG";
+  }
+
+  function imageCandidates(name) {
+    const aliases = {
+      "Hot Caffe Condensed Milk": "Hot Caffe with Condensed Milk",
+      "Iced Coffee Mint Latte": "Iced Mint Coffee Latte",
+    };
+    const bases = unique([
+      name,
+      aliases[name],
+      name.replace("Caffe Condensed Milk", "Caffe with Condensed Milk"),
+      name.replace("Coffee Mint", "Mint Coffee"),
+    ].filter(Boolean));
+
+    if (state.imageFiles.length) {
+      const fileMap = new Map(
+        state.imageFiles.map((file) => [imageKey(file.replace(/\.[^.]+$/, "")), file]),
+      );
+      const match = bases.map((base) => fileMap.get(imageKey(base))).find(Boolean);
+      if (match) return [encodeURI(`image/${match}`), "image/logo.JPG"];
+    }
+
+    const extensions = ["PNG", "png", "JPG", "jpg", "JPEG", "jpeg"];
+    return bases.flatMap((base) => extensions.map((ext) => encodeURI(`image/${base}.${ext}`)));
+  }
+
+  function imageKey(value) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+
+  function cell(row, index) {
+    if (index < 0) return "";
+    return stringValue(row[index]);
+  }
+
+  function numberCell(row, index) {
+    if (index < 0) return 0;
+    const value = row[index];
+    if (typeof value === "number") return value;
+    const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function normalizeLabel(value) {
+    return stringValue(value).toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function stringValue(value) {
+    return value == null ? "" : String(value).trim();
+  }
+
+  function slugify(value) {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  function unique(values) {
+    return [...new Set(values.filter(Boolean))];
+  }
+
+  function roundMoney(value) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
+  function makeOrderId() {
+    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(2, 14);
+    const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `LL${stamp}${random}`;
+  }
+
+  function showToast(message) {
+    clearTimeout(toastTimer);
+    els.toast.textContent = message;
+    els.toast.classList.add("is-visible");
+    toastTimer = setTimeout(() => els.toast.classList.remove("is-visible"), 2600);
+  }
+
+  function refreshIcons() {
+    if (window.lucide) window.lucide.createIcons();
+  }
+})();
