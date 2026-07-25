@@ -64,6 +64,7 @@
   let toastTimer = null;
   let supabaseClient = null;
   let realtimeChannel = null;
+  let pollInterval = null;
 
   init();
 
@@ -217,8 +218,10 @@
 
     if (tab === "orders") {
       loadMyOrders();
+      startPolling();
     } else {
       unsubscribeRealtime();
+      stopPolling();
     }
   }
 
@@ -258,6 +261,55 @@
       els.ordersStatus.textContent = "Failed to load orders.";
     } finally {
       state.loadingOrders = false;
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollInterval = setInterval(refreshOrdersSilently, 10000); // every 10 seconds
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  async function refreshOrdersSilently() {
+    if (!supabaseClient || state.activeTab !== "orders") return;
+
+    const telegramUser = getTelegramUser();
+    const userId = telegramUser ? String(telegramUser.id) : null;
+    if (!userId) return;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from("orders")
+        .select("*")
+        .eq("telegram_user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) return;
+      if (!data) return;
+
+      // Only re-render if something changed
+      const changed = JSON.stringify(data) !== JSON.stringify(state.myOrders);
+      if (changed) {
+        state.myOrders = data;
+        // Also refresh the detail panel if viewing an order
+        if (state.selectedOrder) {
+          const fresh = data.find((o) => o.id === state.selectedOrder.id);
+          if (fresh) {
+            state.selectedOrder = fresh;
+            showOrderDetail(fresh);
+          }
+        }
+        renderOrders();
+      }
+    } catch (_) {
+      // silent polling failure
     }
   }
 
