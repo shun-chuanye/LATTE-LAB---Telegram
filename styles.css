@@ -1166,33 +1166,18 @@ legend,
   border-radius: 12px;
   object-fit: contain;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
-}
-
-.lightbox-close {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  right: max(16px, env(safe-area-inset-right));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 1.2rem;
   cursor: pointer;
-  transition: background 140ms ease;
 }
 
-.lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.lightbox-close svg {
-  width: 22px;
-  height: 22px;
+.lightbox-name {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: center;
+  max-width: min(90vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lightbox-price {

@@ -46,8 +46,8 @@
     // Image lightbox
     imageLightbox: document.getElementById("imageLightbox"),
     lightboxImage: document.getElementById("lightboxImage"),
+    lightboxName: document.getElementById("lightboxName"),
     lightboxPrice: document.getElementById("lightboxPrice"),
-    lightboxClose: document.getElementById("lightboxClose"),
   };
 
   const state = {
@@ -208,10 +208,7 @@
     els.orderDetailBack.addEventListener("click", closeOrderDetail);
 
     // Image lightbox
-    els.lightboxClose.addEventListener("click", closeLightbox);
-    els.imageLightbox.addEventListener("click", (e) => {
-      if (e.target === els.imageLightbox) closeLightbox();
-    });
+    els.lightboxImage.addEventListener("click", closeLightbox);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeLightbox();
     });
@@ -508,6 +505,7 @@
   // ============================================================
 
   function openLightbox(product) {
+    els.lightboxName.textContent = product.name;
     els.lightboxImage.src = product.imageCandidates[0] || "image/logo.JPG";
     els.lightboxImage.alt = product.name;
     els.lightboxPrice.innerHTML = `
