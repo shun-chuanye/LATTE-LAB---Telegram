@@ -43,6 +43,11 @@
     orderDetailContent: document.getElementById("orderDetailContent"),
     orderDetailBack: document.getElementById("orderDetailBack"),
     historyBadge: document.getElementById("historyBadge"),
+    // Image lightbox
+    imageLightbox: document.getElementById("imageLightbox"),
+    lightboxImage: document.getElementById("lightboxImage"),
+    lightboxPrice: document.getElementById("lightboxPrice"),
+    lightboxClose: document.getElementById("lightboxClose"),
   };
 
   const state = {
@@ -201,6 +206,15 @@
     els.tabMenu.addEventListener("click", () => switchTab("menu"));
     els.tabOrders.addEventListener("click", () => switchTab("orders"));
     els.orderDetailBack.addEventListener("click", closeOrderDetail);
+
+    // Image lightbox
+    els.lightboxClose.addEventListener("click", closeLightbox);
+    els.imageLightbox.addEventListener("click", (e) => {
+      if (e.target === els.imageLightbox) closeLightbox();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeLightbox();
+    });
   }
 
   // ============================================================
@@ -490,6 +504,25 @@
   }
 
   // ============================================================
+  // Image Lightbox
+  // ============================================================
+
+  function openLightbox(product) {
+    els.lightboxImage.src = product.imageCandidates[0] || "image/logo.JPG";
+    els.lightboxImage.alt = product.name;
+    els.lightboxPrice.innerHTML = `
+      <strong>${formatPrice(product)}</strong>
+      <small>${formatSecondaryPrice(product)}</small>
+    `;
+    els.imageLightbox.classList.add("is-open");
+    refreshIcons();
+  }
+
+  function closeLightbox() {
+    els.imageLightbox.classList.remove("is-open");
+  }
+
+  // ============================================================
   // Order ID Generation (LL + YYMMDD + sequential 001, daily reset)
   // ============================================================
 
@@ -644,6 +677,8 @@
     media.className = "product-media";
     const image = document.createElement("img");
     image.alt = product.name;
+    image.style.cursor = "pointer";
+    image.addEventListener("click", () => openLightbox(product));
     attachImageFallback(image, product.imageCandidates);
     media.append(image);
 
