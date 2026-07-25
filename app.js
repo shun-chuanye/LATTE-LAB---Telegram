@@ -63,6 +63,7 @@
 
   let toastTimer = null;
   let supabaseClient = null;
+  let realtimeChannel = null;
 
   init();
 
@@ -216,6 +217,8 @@
 
     if (tab === "orders") {
       loadMyOrders();
+    } else {
+      unsubscribeRealtime();
     }
   }
 
@@ -247,11 +250,65 @@
       if (error) throw error;
       state.myOrders = data || [];
       renderOrders();
+
+      // Subscribe to realtime updates for this user's orders
+      subscribeToOrderUpdates(userId);
     } catch (error) {
       console.error("Failed to load orders:", error);
       els.ordersStatus.textContent = "Failed to load orders.";
     } finally {
       state.loadingOrders = false;
+    }
+  }
+
+  function subscribeToOrderUpdates(userId) {
+    unsubscribeRealtime();
+
+    if (!supabaseClient || !supabaseClient.realtime) return;
+
+    try {
+      realtimeChannel = supabaseClient
+        .channel("orders-updates")
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `telegram_user_id=eq.${userId}`,
+          },
+          (payload) => {
+            const updated = payload.new;
+            const index = state.myOrders.findIndex((o) => o.id === updated.id);
+            if (index >= 0) {
+              state.myOrders[index] = updated;
+              // Refresh the detail panel if currently viewing this order
+              if (state.selectedOrder && state.selectedOrder.id === updated.id) {
+                state.selectedOrder = updated;
+                showOrderDetail(updated);
+              }
+              renderOrders();
+            }
+          },
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("Realtime: listening for order updates");
+          }
+        });
+    } catch (error) {
+      console.warn("Realtime subscription failed:", error);
+    }
+  }
+
+  function unsubscribeRealtime() {
+    if (realtimeChannel) {
+      try {
+        supabaseClient.removeChannel(realtimeChannel);
+      } catch (_) {
+        // ignore cleanup errors
+      }
+      realtimeChannel = null;
     }
   }
 
