@@ -1,0 +1,4 @@
+id,client_order_id,created_at,status,customer_name,telegram_user_id,phone,fulfillment_method,currency,subtotal_usd,subtotal_khr,quantity,name, unit_price_usd,unit_price_khr
+1,LL260725001,2026/7/24,completed,Chea Shun,7432310054,98891990,pickup,USD,1.25,5000,1,Iced Passion Soda,1.25,5000
+2,LL260725001,2026/7/24,completed,Chea Shun,7432310054,98891990,pickup,USD,2.5,10000,2,Hot Americano,1.25,5000
+3,LL260725002,2026/7/24,completed,xie,1490356679,98891880,delivery,USD,2,5000,2,Peach Tea Macchiato,1,4000

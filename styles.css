@@ -669,6 +669,382 @@ legend,
   transform: translate(-50%, 0);
 }
 
+/* ============================================================
+   Main Tabs Navigation
+   ============================================================ */
+
+.main-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.main-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.92rem;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.main-tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.main-tab.is-active {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ============================================================
+   Orders Section
+   ============================================================ */
+
+.orders-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin-bottom: 14px;
+}
+
+.orders-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.orders-list {
+  display: grid;
+  gap: 12px;
+}
+
+/* Empty State */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  padding: 32px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.empty-state span {
+  font-size: 0.88rem;
+}
+
+/* Order Card */
+
+.order-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(23, 33, 29, 0.04);
+}
+
+.order-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.order-id {
+  font-weight: 900;
+  font-size: 0.95rem;
+  color: var(--brand);
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+}
+
+/* Order Status Badge */
+
+.order-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-new {
+  background: #e0edff;
+  color: #1a56db;
+}
+
+.status-accepted {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-preparing {
+  background: #e0d4ff;
+  color: #6f42c1;
+}
+
+.status-ready {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.order-card-body {
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.order-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.order-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.order-meta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.order-summary-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.order-total {
+  color: var(--brand);
+  font-size: 0.95rem;
+}
+
+.order-items-preview {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.order-detail-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--brand);
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.order-detail-btn:hover {
+  background: var(--surface-2);
+}
+
+.order-detail-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Order Detail Panel */
+
+.order-detail-panel {
+  animation: fadeIn 160ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.detail-back-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.order-detail-content {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-section {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.detail-section h4 {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+
+.detail-row + .detail-row {
+  border-top: 1px solid var(--surface-2);
+}
+
+.detail-row span:first-child {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.detail-row strong,
+.detail-row span:last-child {
+  font-weight: 700;
+  text-align: right;
+}
+
+.detail-items {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.detail-item + .detail-item {
+  border-top: 1px solid var(--surface-2);
+}
+
+.detail-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-item-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-item-qty {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.detail-item-prices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.detail-item-prices span {
+  color: var(--brand);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.detail-item-prices small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.detail-totals {
+  background: var(--surface-2);
+}
+
 @media (min-width: 900px) {
   .app-shell {
     padding-bottom: 48px;

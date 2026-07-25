@@ -30,27 +30,63 @@
         </button>
       </header>
 
-      <section class="order-tools" aria-label="Menu tools">
-        <label class="search-box">
-          <i data-lucide="search" aria-hidden="true"></i>
-          <input id="searchInput" type="search" placeholder="Search drinks" autocomplete="off" />
-        </label>
-        <label class="check-pill">
-          <input id="promoOnly" type="checkbox" />
-          <span>Promo</span>
-        </label>
-        <div class="currency-toggle" aria-label="Currency">
-          <button class="segment is-active" type="button" data-currency="USD">USD</button>
-          <button class="segment" type="button" data-currency="KHR">KHR</button>
+      <!-- Tab Navigation -->
+      <nav class="main-tabs" aria-label="Main navigation">
+        <button class="main-tab is-active" id="tabMenu" type="button">
+          <i data-lucide="coffee" aria-hidden="true"></i>
+          Menu
+        </button>
+        <button class="main-tab" id="tabOrders" type="button">
+          <i data-lucide="clipboard-list" aria-hidden="true"></i>
+          My Orders
+        </button>
+      </nav>
+
+      <!-- Menu Section -->
+      <section id="menuSection">
+        <div class="order-tools" aria-label="Menu tools">
+          <label class="search-box">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input id="searchInput" type="search" placeholder="Search drinks" autocomplete="off" />
+          </label>
+          <label class="check-pill">
+            <input id="promoOnly" type="checkbox" />
+            <span>Promo</span>
+          </label>
+          <div class="currency-toggle" aria-label="Currency">
+            <button class="segment is-active" type="button" data-currency="USD">USD</button>
+            <button class="segment" type="button" data-currency="KHR">KHR</button>
+          </div>
         </div>
+
+        <nav class="category-tabs" id="categoryTabs" aria-label="Drink categories"></nav>
+
+        <main>
+          <div class="status-line" id="dataStatus">Loading menu from Excel...</div>
+          <section class="menu-grid" id="menuGrid" aria-live="polite"></section>
+        </main>
       </section>
 
-      <nav class="category-tabs" id="categoryTabs" aria-label="Drink categories"></nav>
+      <!-- Orders Section -->
+      <section id="ordersSection" hidden>
+        <div class="orders-header">
+          <p class="orders-status" id="ordersStatus"></p>
+        </div>
+        <div class="orders-list" id="ordersList">
+          <div class="empty-state">
+            <i data-lucide="loader-circle"></i>
+            <p>Loading...</p>
+          </div>
+        </div>
 
-      <main>
-        <div class="status-line" id="dataStatus">Loading menu from Excel...</div>
-        <section class="menu-grid" id="menuGrid" aria-live="polite"></section>
-      </main>
+        <!-- Order Detail Panel -->
+        <div class="order-detail-panel" id="orderDetailPanel" hidden>
+          <button class="detail-back-btn" id="orderDetailBack" type="button">
+            <i data-lucide="arrow-left"></i> Back to orders
+          </button>
+          <div class="order-detail-content" id="orderDetailContent"></div>
+        </div>
+      </section>
     </div>
 
     <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>

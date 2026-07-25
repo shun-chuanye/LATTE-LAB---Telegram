@@ -32,6 +32,17 @@
     mobileCartLabel: document.getElementById("mobileCartLabel"),
     mobileCartTotal: document.getElementById("mobileCartTotal"),
     toast: document.getElementById("toast"),
+    // Tabs
+    tabMenu: document.getElementById("tabMenu"),
+    tabOrders: document.getElementById("tabOrders"),
+    menuSection: document.getElementById("menuSection"),
+    ordersSection: document.getElementById("ordersSection"),
+    ordersList: document.getElementById("ordersList"),
+    ordersStatus: document.getElementById("ordersStatus"),
+    orderDetailPanel: document.getElementById("orderDetailPanel"),
+    orderDetailContent: document.getElementById("orderDetailContent"),
+    orderDetailBack: document.getElementById("orderDetailBack"),
+    historyBadge: document.getElementById("historyBadge"),
   };
 
   const state = {
@@ -44,6 +55,10 @@
     imageFiles: [],
     cart: new Map(),
     submitting: false,
+    activeTab: "menu",
+    myOrders: [],
+    loadingOrders: false,
+    selectedOrder: null,
   };
 
   let toastTimer = null;
@@ -179,7 +194,235 @@
 
     els.checkoutForm.addEventListener("change", updateAddressLabel);
     els.checkoutForm.addEventListener("submit", submitOrder);
+
+    // Tab navigation
+    els.tabMenu.addEventListener("click", () => switchTab("menu"));
+    els.tabOrders.addEventListener("click", () => switchTab("orders"));
+    els.orderDetailBack.addEventListener("click", closeOrderDetail);
   }
+
+  // ============================================================
+  // Tab Navigation
+  // ============================================================
+
+  function switchTab(tab) {
+    state.activeTab = tab;
+    state.selectedOrder = null;
+    els.tabMenu.classList.toggle("is-active", tab === "menu");
+    els.tabOrders.classList.toggle("is-active", tab === "orders");
+    els.menuSection.hidden = tab !== "menu";
+    els.ordersSection.hidden = tab !== "orders";
+    els.orderDetailPanel.hidden = true;
+
+    if (tab === "orders") {
+      loadMyOrders();
+    }
+  }
+
+  // ============================================================
+  // Order History
+  // ============================================================
+
+  async function loadMyOrders() {
+    if (!supabaseClient || state.loadingOrders) return;
+
+    const telegramUser = getTelegramUser();
+    const userId = telegramUser ? String(telegramUser.id) : null;
+    if (!userId) {
+      els.ordersStatus.textContent = "Unable to identify Telegram user.";
+      return;
+    }
+
+    state.loadingOrders = true;
+    els.ordersStatus.textContent = "Loading your orders...";
+
+    try {
+      const { data, error } = await supabaseClient
+        .from("orders")
+        .select("*")
+        .eq("telegram_user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      state.myOrders = data || [];
+      renderOrders();
+    } catch (error) {
+      console.error("Failed to load orders:", error);
+      els.ordersStatus.textContent = "Failed to load orders.";
+    } finally {
+      state.loadingOrders = false;
+    }
+  }
+
+  function renderOrders() {
+    if (!state.myOrders.length) {
+      els.ordersList.innerHTML =
+        '<div class="empty-state"><i data-lucide="clipboard-list"></i><p>No orders yet</p><span>Your orders will appear here after you place them.</span></div>';
+      els.ordersStatus.textContent = "";
+      refreshIcons();
+      return;
+    }
+
+    els.ordersStatus.textContent = `${state.myOrders.length} order${state.myOrders.length === 1 ? "" : "s"} found`;
+
+    els.ordersList.innerHTML = state.myOrders
+      .map(
+        (order) => `
+      <div class="order-card" data-order-id="${order.id}">
+        <div class="order-card-header">
+          <span class="order-id">${escapeHtml(order.client_order_id)}</span>
+          <span class="order-status status-${order.status}">${statusLabel(order.status)}</span>
+        </div>
+        <div class="order-card-body">
+          <div class="order-meta">
+            <span><i data-lucide="calendar"></i> ${formatDate(order.created_at)}</span>
+            <span><i data-lucide="truck"></i> ${fulfillmentLabel(order.fulfillment_method)}</span>
+          </div>
+          <div class="order-summary-line">
+            <span>${order.item_count} item${order.item_count === 1 ? "" : "s"}</span>
+            <span class="order-total">${formatOrderTotal(order)}</span>
+          </div>
+          <div class="order-items-preview">
+            ${previewItems(order.items)}
+          </div>
+        </div>
+        <button class="order-detail-btn" data-action="view-detail" data-order-id="${order.id}">
+          <i data-lucide="eye"></i> View Details
+        </button>
+      </div>
+    `,
+      )
+      .join("");
+
+    // Bind click events for order detail
+    els.ordersList.querySelectorAll("[data-action='view-detail']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const orderId = parseInt(btn.dataset.orderId);
+        const order = state.myOrders.find((o) => o.id === orderId);
+        if (order) showOrderDetail(order);
+      });
+    });
+
+    refreshIcons();
+  }
+
+  function showOrderDetail(order) {
+    state.selectedOrder = order;
+    const items = order.items || [];
+
+    els.orderDetailContent.innerHTML = `
+      <div class="detail-section">
+        <div class="detail-row">
+          <span>Order ID</span>
+          <strong>${escapeHtml(order.client_order_id)}</strong>
+        </div>
+        <div class="detail-row">
+          <span>Status</span>
+          <span class="order-status status-${order.status}">${statusLabel(order.status)}</span>
+        </div>
+        <div class="detail-row">
+          <span>Date</span>
+          <span>${formatDateTime(order.created_at)}</span>
+        </div>
+        <div class="detail-row">
+          <span>Type</span>
+          <span>${fulfillmentLabel(order.fulfillment_method)}</span>
+        </div>
+        ${order.address ? `<div class="detail-row"><span>Address</span><span>${escapeHtml(order.address)}</span></div>` : ""}
+        ${order.note ? `<div class="detail-row"><span>Note</span><span>${escapeHtml(order.note)}</span></div>` : ""}
+      </div>
+      <div class="detail-section">
+        <h4>Items</h4>
+        <div class="detail-items">
+          ${items
+            .map(
+              (item) => `
+            <div class="detail-item">
+              <div class="detail-item-info">
+                <span class="detail-item-name">${escapeHtml(item.name)}</span>
+                <span class="detail-item-qty">x${item.quantity}</span>
+              </div>
+              <div class="detail-item-prices">
+                <span>${formatDetailPrice(item)}</span>
+                <small>${formatDetailSecondaryPrice(item)}</small>
+              </div>
+            </div>
+          `,
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="detail-section detail-totals">
+        <div class="detail-row">
+          <span>Total (${order.currency || "USD"})</span>
+          <strong>${formatOrderTotal(order)}</strong>
+        </div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-row">
+          <span>Customer</span>
+          <span>${escapeHtml(order.customer_name || "-")}</span>
+        </div>
+        <div class="detail-row">
+          <span>Phone</span>
+          <span>${escapeHtml(order.phone || "-")}</span>
+        </div>
+      </div>
+    `;
+
+    els.orderDetailPanel.hidden = false;
+  }
+
+  function closeOrderDetail() {
+    state.selectedOrder = null;
+    els.orderDetailPanel.hidden = true;
+  }
+
+  // ============================================================
+  // Order ID Generation (LL + YYMMDD + sequential 001, daily reset)
+  // ============================================================
+
+  async function nextOrderId() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const prefix = `LL${yy}${mm}${dd}`;
+
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient
+          .from("orders")
+          .select("client_order_id")
+          .like("client_order_id", `${prefix}%`)
+          .order("client_order_id", { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+
+        let seq = 1;
+        if (data && data.length > 0) {
+          const last = data[0].client_order_id;
+          const lastSeq = parseInt(last.slice(-3));
+          if (!isNaN(lastSeq)) seq = lastSeq + 1;
+        }
+        return `${prefix}${String(seq).padStart(3, "0")}`;
+      } catch (error) {
+        console.warn("Failed to generate sequential ID, falling back", error);
+      }
+    }
+
+    // Fallback: timestamp-based ID
+    const stamp = now.toISOString().replace(/[-:TZ.]/g, "").slice(2, 14);
+    const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `LL${stamp}${random}`;
+  }
+
+  // ============================================================
+  // Menu loading
+  // ============================================================
 
   async function loadMenuFromExcel() {
     if (!window.XLSX) throw new Error("SheetJS failed to load.");
@@ -430,6 +673,10 @@
     telegram && telegram.HapticFeedback && telegram.HapticFeedback.impactOccurred("light");
   }
 
+  // ============================================================
+  // Order Submission
+  // ============================================================
+
   async function submitOrder(event) {
     event.preventDefault();
     const entries = cartEntries();
@@ -443,13 +690,48 @@
       return;
     }
 
-    const order = buildOrder(entries, formData);
     setSubmitting(true);
 
     try {
+      const orderId = await nextOrderId();
+      const order = buildOrder(entries, formData, orderId);
+
       if (supabaseClient) {
-        const { error } = await supabaseClient.from("orders").insert(toSupabaseOrder(order));
-        if (error) throw error;
+        // Insert order header
+        const { data: insertedOrder, error: orderError } = await supabaseClient
+          .from("orders")
+          .insert(toSupabaseOrder(order))
+          .select("id")
+          .single();
+
+        if (orderError) throw orderError;
+
+        // Insert order_items (one row per product — matches orders_rows.csv structure)
+        if (insertedOrder) {
+          const orderItems = entries.map(({ product, quantity }) => ({
+            order_id: insertedOrder.id,
+            client_order_id: order.client_order_id,
+            status: "new",
+            customer_name: order.customer_name || null,
+            telegram_user_id: order.telegram_user ? String(order.telegram_user.id) : null,
+            phone: order.phone || null,
+            fulfillment_method: order.fulfillment_method,
+            currency: order.currency,
+            subtotal_usd: order.subtotal_usd,
+            subtotal_khr: order.subtotal_khr,
+            quantity,
+            name: product.name,
+            unit_price_usd: product.priceUsd,
+            unit_price_khr: product.priceKhr,
+          }));
+
+          const { error: itemsError } = await supabaseClient
+            .from("order_items")
+            .insert(orderItems);
+
+          if (itemsError) console.warn("Failed to insert order_items:", itemsError);
+        }
+
         showOrderSuccess(order, "Saved to Supabase");
       } else if (telegram && typeof telegram.sendData === "function") {
         telegram.sendData(JSON.stringify({ type: "latte_lab_order", order }));
@@ -477,12 +759,12 @@
     }
   }
 
-  function buildOrder(entries, formData) {
+  function buildOrder(entries, formData, orderId) {
     const totals = cartTotals(entries);
     const telegramUser = telegram && telegram.initDataUnsafe ? telegram.initDataUnsafe.user || null : null;
 
     return {
-      client_order_id: makeOrderId(),
+      client_order_id: orderId,
       created_at: new Date().toISOString(),
       source: "telegram_web_app",
       customer_name: stringValue(formData.get("customer_name")),
@@ -555,6 +837,10 @@
     refreshIcons();
   }
 
+  // ============================================================
+  // Cart UI
+  // ============================================================
+
   function openCart() {
     els.cartDrawer.classList.add("is-open");
     els.cartDrawer.setAttribute("aria-hidden", "false");
@@ -592,6 +878,10 @@
     );
   }
 
+  // ============================================================
+  // Formatting helpers
+  // ============================================================
+
   function formatPrice(product) {
     if (state.currency === "KHR") return `${currencyFormatters.KHR.format(product.priceKhr)} KHR`;
     return currencyFormatters.USD.format(product.priceUsd);
@@ -610,6 +900,66 @@
   function formatTotals(totals) {
     if (state.currency === "KHR") return `${currencyFormatters.KHR.format(totals.khr)} KHR`;
     return currencyFormatters.USD.format(totals.usd);
+  }
+
+  function formatOrderTotal(order) {
+    if (order.currency === "KHR") return `${currencyFormatters.KHR.format(Number(order.subtotal_khr))} KHR`;
+    return currencyFormatters.USD.format(Number(order.subtotal_usd));
+  }
+
+  function formatDetailPrice(item) {
+    if (state.currency === "KHR") return `${currencyFormatters.KHR.format(item.unit_price_khr)} KHR`;
+    return currencyFormatters.USD.format(item.unit_price_usd);
+  }
+
+  function formatDetailSecondaryPrice(item) {
+    if (state.currency === "KHR") return currencyFormatters.USD.format(item.unit_price_usd);
+    return `${currencyFormatters.KHR.format(item.unit_price_khr)} KHR`;
+  }
+
+  function formatDate(isoString) {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return isoString;
+    }
+  }
+
+  function formatDateTime(isoString) {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleString("en-US", {
+        year: "numeric", month: "short", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch {
+      return isoString;
+    }
+  }
+
+  function statusLabel(status) {
+    const map = {
+      new: "New",
+      accepted: "Accepted",
+      preparing: "Preparing",
+      ready: "Ready",
+      completed: "Completed",
+      cancelled: "Cancelled",
+    };
+    return map[status] || status;
+  }
+
+  function fulfillmentLabel(method) {
+    const map = { pickup: "Pickup", dine_in: "Dine-in", delivery: "Delivery" };
+    return map[method] || method;
+  }
+
+  function previewItems(items) {
+    if (!items || !items.length) return "";
+    const names = items.slice(0, 3).map((i) => `${escapeHtml(i.name)} x${i.quantity}`);
+    if (items.length > 3) names.push(`+${items.length - 3} more`);
+    return names.join(", ");
   }
 
   function makeBadge(text, extraClass) {
@@ -716,10 +1066,15 @@
     return Math.round((value + Number.EPSILON) * 100) / 100;
   }
 
-  function makeOrderId() {
-    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(2, 14);
-    const random = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `LL${stamp}${random}`;
+  function getTelegramUser() {
+    return telegram && telegram.initDataUnsafe ? telegram.initDataUnsafe.user || null : null;
+  }
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   function showToast(message) {
