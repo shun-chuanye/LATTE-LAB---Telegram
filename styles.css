@@ -448,18 +448,30 @@ h2 {
   gap: 8px;
 }
 
-.text-button {
+.clear-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
   min-height: 36px;
-  padding: 0 12px;
-  border: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(179, 57, 57, 0.2);
   border-radius: 8px;
-  background: transparent;
+  background: rgba(179, 57, 57, 0.06);
   color: var(--danger);
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.clear-btn:hover {
+  background: rgba(179, 57, 57, 0.12);
+  border-color: rgba(179, 57, 57, 0.35);
+}
+
+.clear-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .cart-items {
