@@ -41,7 +41,6 @@
     ordersSection: document.getElementById("ordersSection"),
     ordersList: document.getElementById("ordersList"),
     ordersStatus: document.getElementById("ordersStatus"),
-    historyBadge: document.getElementById("historyBadge"),
     // Image lightbox
     imageLightbox: document.getElementById("imageLightbox"),
     lightboxImage: document.getElementById("lightboxImage"),
@@ -200,9 +199,6 @@
     els.cartClose.addEventListener("click", closeCart);
     els.cartClear.addEventListener("click", clearCart);
     els.drawerBackdrop.addEventListener("click", closeCart);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeCart();
-    });
 
     els.checkoutForm.addEventListener("change", updateAddressLabel);
     els.checkoutForm.addEventListener("submit", submitOrder);
@@ -213,12 +209,21 @@
 
     // Image lightbox
     els.lightboxImage.addEventListener("click", closeLightbox);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeLightbox();
-    });
 
     // Success modal
     els.successClose.addEventListener("click", closeSuccessModal);
+
+    // Unified Escape key handling
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (!els.imageLightbox.classList.contains("is-open") &&
+          els.successOverlay.hidden &&
+          !els.cartDrawer.classList.contains("is-open")) return;
+      event.preventDefault();
+      closeLightbox();
+      closeSuccessModal();
+      closeCart();
+    });
   }
 
   // ============================================================
