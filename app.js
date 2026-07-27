@@ -222,6 +222,7 @@
     els.ordersSection.hidden = tab !== "orders";
 
     if (tab === "orders") {
+      state.expandedOrders.clear();
       loadMyOrders();
       startPolling();
     } else {
