@@ -253,8 +253,9 @@ h2 {
 .status-line {
   min-height: 24px;
   margin-bottom: 12px;
-  color: var(--muted);
+  color: var(--brand);
   font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .menu-grid {
