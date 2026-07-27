@@ -60,6 +60,7 @@
     activeTab: "menu",
     myOrders: [],
     loadingOrders: false,
+    expandedOrders: new Set(),
   };
 
   let toastTimer = null;
@@ -387,9 +388,9 @@
           </div>
         </div>
         <button class="order-detail-btn" data-action="toggle-detail" data-order-id="${order.id}">
-          <i data-lucide="chevron-down"></i> View Details
+          <i data-lucide="${state.expandedOrders.has(String(order.id)) ? 'chevron-up' : 'chevron-down'}"></i> ${state.expandedOrders.has(String(order.id)) ? 'Hide Details' : 'View Details'}
         </button>
-        <div class="order-detail-inline" data-detail-id="${order.id}" hidden>
+        <div class="order-detail-inline" data-detail-id="${order.id}"${state.expandedOrders.has(String(order.id)) ? '' : ' hidden'}>
           ${buildDetailHTML(order)}
         </div>
       </div>
@@ -402,16 +403,13 @@
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const orderId = btn.dataset.orderId;
-        const detailEl = els.ordersList.querySelector(`[data-detail-id="${orderId}"]`);
-        const isOpen = !detailEl.hidden;
-        if (isOpen) {
-          detailEl.hidden = true;
-          btn.innerHTML = '<i data-lucide="chevron-down"></i> View Details';
+        if (state.expandedOrders.has(orderId)) {
+          state.expandedOrders.delete(orderId);
         } else {
-          detailEl.hidden = false;
-          btn.innerHTML = '<i data-lucide="chevron-up"></i> Hide Details';
+          state.expandedOrders.add(orderId);
         }
-        refreshIcons();
+        // Just re-render this one card to keep it simple
+        renderOrders();
       });
     });
 
