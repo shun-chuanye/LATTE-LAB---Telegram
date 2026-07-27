@@ -39,9 +39,6 @@
     ordersSection: document.getElementById("ordersSection"),
     ordersList: document.getElementById("ordersList"),
     ordersStatus: document.getElementById("ordersStatus"),
-    orderDetailPanel: document.getElementById("orderDetailPanel"),
-    orderDetailContent: document.getElementById("orderDetailContent"),
-    orderDetailBack: document.getElementById("orderDetailBack"),
     historyBadge: document.getElementById("historyBadge"),
     // Image lightbox
     imageLightbox: document.getElementById("imageLightbox"),
@@ -63,7 +60,6 @@
     activeTab: "menu",
     myOrders: [],
     loadingOrders: false,
-    selectedOrder: null,
   };
 
   let toastTimer = null;
@@ -205,7 +201,6 @@
     // Tab navigation
     els.tabMenu.addEventListener("click", () => switchTab("menu"));
     els.tabOrders.addEventListener("click", () => switchTab("orders"));
-    els.orderDetailBack.addEventListener("click", closeOrderDetail);
 
     // Image lightbox
     els.lightboxImage.addEventListener("click", closeLightbox);
@@ -220,12 +215,10 @@
 
   function switchTab(tab) {
     state.activeTab = tab;
-    state.selectedOrder = null;
     els.tabMenu.classList.toggle("is-active", tab === "menu");
     els.tabOrders.classList.toggle("is-active", tab === "orders");
     els.menuSection.hidden = tab !== "menu";
     els.ordersSection.hidden = tab !== "orders";
-    els.orderDetailPanel.hidden = true;
 
     if (tab === "orders") {
       loadMyOrders();
@@ -305,18 +298,9 @@
       if (error) return;
       if (!data) return;
 
-      // Only re-render if something changed
       const changed = JSON.stringify(data) !== JSON.stringify(state.myOrders);
       if (changed) {
         state.myOrders = data;
-        // Also refresh the detail panel if viewing an order
-        if (state.selectedOrder) {
-          const fresh = data.find((o) => o.id === state.selectedOrder.id);
-          if (fresh) {
-            state.selectedOrder = fresh;
-            showOrderDetail(fresh);
-          }
-        }
         renderOrders();
       }
     } catch (_) {
@@ -345,11 +329,6 @@
             const index = state.myOrders.findIndex((o) => o.id === updated.id);
             if (index >= 0) {
               state.myOrders[index] = updated;
-              // Refresh the detail panel if currently viewing this order
-              if (state.selectedOrder && state.selectedOrder.id === updated.id) {
-                state.selectedOrder = updated;
-                showOrderDetail(updated);
-              }
               renderOrders();
             }
           },
@@ -407,32 +386,41 @@
             ${previewItems(order.items)}
           </div>
         </div>
-        <button class="order-detail-btn" data-action="view-detail" data-order-id="${order.id}">
-          <i data-lucide="eye"></i> View Details
+        <button class="order-detail-btn" data-action="toggle-detail" data-order-id="${order.id}">
+          <i data-lucide="chevron-down"></i> View Details
         </button>
+        <div class="order-detail-inline" data-detail-id="${order.id}" hidden>
+          ${buildDetailHTML(order)}
+        </div>
       </div>
     `,
       )
       .join("");
 
-    // Bind click events for order detail
-    els.ordersList.querySelectorAll("[data-action='view-detail']").forEach((btn) => {
+    // Bind toggle events
+    els.ordersList.querySelectorAll("[data-action='toggle-detail']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const orderId = parseInt(btn.dataset.orderId);
-        const order = state.myOrders.find((o) => o.id === orderId);
-        if (order) showOrderDetail(order);
+        const orderId = btn.dataset.orderId;
+        const detailEl = els.ordersList.querySelector(`[data-detail-id="${orderId}"]`);
+        const isOpen = !detailEl.hidden;
+        if (isOpen) {
+          detailEl.hidden = true;
+          btn.innerHTML = '<i data-lucide="chevron-down"></i> View Details';
+        } else {
+          detailEl.hidden = false;
+          btn.innerHTML = '<i data-lucide="chevron-up"></i> Hide Details';
+        }
+        refreshIcons();
       });
     });
 
     refreshIcons();
   }
 
-  function showOrderDetail(order) {
-    state.selectedOrder = order;
+  function buildDetailHTML(order) {
     const items = order.items || [];
-
-    els.orderDetailContent.innerHTML = `
+    return `
       <div class="detail-section">
         <div class="detail-row">
           <span>Order ID</span>
@@ -491,13 +479,6 @@
         </div>
       </div>
     `;
-
-    els.orderDetailPanel.hidden = false;
-  }
-
-  function closeOrderDetail() {
-    state.selectedOrder = null;
-    els.orderDetailPanel.hidden = true;
   }
 
   // ============================================================
