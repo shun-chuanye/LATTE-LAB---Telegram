@@ -81,7 +81,7 @@
       state.imageFiles = await loadImageManifest();
       state.products = await loadMenuFromExcel();
       state.categories = ["All", ...unique(state.products.map((product) => product.type))];
-      els.dataStatus.textContent = `${state.products.length} drinks loaded from Excel.`;
+      els.dataStatus.textContent = `Total ${state.products.length} drinks`;
       render();
     } catch (error) {
       console.error(error);

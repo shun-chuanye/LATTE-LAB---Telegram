@@ -1031,6 +1031,22 @@ legend,
   background: var(--surface-2);
 }
 
+/* Site Footer */
+
+.site-footer {
+  margin-top: 32px;
+  padding: 16px 0;
+  text-align: center;
+  border-top: 1px solid var(--line);
+}
+
+.site-footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 @media (min-width: 900px) {
   .app-shell {
     padding-bottom: 48px;
