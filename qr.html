@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LATTE LAB QR Code</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        gap: 24px;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #f7f8f4;
+        color: #17211d;
+        padding: 24px;
+      }
+      .logo {
+        width: 80px;
+        height: 80px;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 2px solid rgba(23,33,29,0.1);
+      }
+      h1 {
+        font-size: 1.6rem;
+        color: #0f5c4d;
+      }
+      .qr-box {
+        padding: 20px;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 8px 32px rgba(23,33,29,0.1);
+        border: 1px solid #dce5dd;
+      }
+      .qr-box img {
+        display: block;
+        width: min(320px, 70vw);
+        height: auto;
+      }
+      p {
+        color: #66746c;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-align: center;
+      }
+      .link {
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: #edf5f0;
+        color: #0f5c4d;
+        font-size: 0.95rem;
+        font-weight: 700;
+        word-break: break-all;
+      }
+      .tip {
+        color: #66746c;
+        font-size: 0.82rem;
+        max-width: 320px;
+        line-height: 1.4;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <img class="logo" src="image/logo.JPG" alt="LATTE LAB" />
+    <h1>LATTE LAB</h1>
+    <p>Scan with Telegram to order coffee</p>
+    <div class="qr-box">
+      <img
+        id="qr"
+        src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=https://t.me/zongshunbot/lattelab"
+        alt="QR Code for LATTE LAB Telegram Mini App"
+      />
+    </div>
+    <div class="link">Chea 086785878</div>
+    <p class="tip">Open Telegram, scan this QR code,<br/>and start ordering from LATTE LAB.</p>
+  </body>
+</html>

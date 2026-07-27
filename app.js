@@ -17,6 +17,7 @@
     dataStatus: document.getElementById("dataStatus"),
     cartToggle: document.getElementById("cartToggle"),
     cartClose: document.getElementById("cartClose"),
+    cartClear: document.getElementById("cartClear"),
     cartDrawer: document.getElementById("cartDrawer"),
     drawerBackdrop: document.getElementById("drawerBackdrop"),
     cartCount: document.getElementById("cartCount"),
@@ -35,6 +36,7 @@
     // Tabs
     tabMenu: document.getElementById("tabMenu"),
     tabOrders: document.getElementById("tabOrders"),
+    ordersBadge: document.getElementById("ordersBadge"),
     menuSection: document.getElementById("menuSection"),
     ordersSection: document.getElementById("ordersSection"),
     ordersList: document.getElementById("ordersList"),
@@ -45,6 +47,10 @@
     lightboxImage: document.getElementById("lightboxImage"),
     lightboxName: document.getElementById("lightboxName"),
     lightboxPrice: document.getElementById("lightboxPrice"),
+    // Success modal
+    successOverlay: document.getElementById("successOverlay"),
+    successOrderId: document.getElementById("successOrderId"),
+    successClose: document.getElementById("successClose"),
   };
 
   const state = {
@@ -83,6 +89,7 @@
       state.categories = ["All", ...unique(state.products.map((product) => product.type))];
       els.dataStatus.textContent = `Total ${state.products.length} drinks`;
       render();
+      loadOrderBadge();
     } catch (error) {
       console.error(error);
       els.dataStatus.textContent = "Could not load menu and price.xlsx. Check the file path and hosting.";
@@ -191,6 +198,7 @@
     els.cartToggle.addEventListener("click", openCart);
     els.mobileCartBar.addEventListener("click", openCart);
     els.cartClose.addEventListener("click", closeCart);
+    els.cartClear.addEventListener("click", clearCart);
     els.drawerBackdrop.addEventListener("click", closeCart);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeCart();
@@ -208,6 +216,9 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeLightbox();
     });
+
+    // Success modal
+    els.successClose.addEventListener("click", closeSuccessModal);
   }
 
   // ============================================================
@@ -267,6 +278,45 @@
       els.ordersStatus.textContent = "Failed to load orders.";
     } finally {
       state.loadingOrders = false;
+      updateOrderBadge();
+    }
+  }
+
+  async function loadOrderBadge() {
+    if (!supabaseClient) return;
+    const telegramUser = getTelegramUser();
+    const userId = telegramUser ? String(telegramUser.id) : null;
+    if (!userId) return;
+    try {
+      const { count, error } = await supabaseClient
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("telegram_user_id", userId)
+        .in("status", ["new", "accepted", "preparing", "ready"]);
+      if (error) return;
+      updateBadgeDisplay(count || 0);
+    } catch (_) {
+      // silent
+    }
+  }
+
+  function updateOrderBadge() {
+    if (!state.myOrders.length) {
+      updateBadgeDisplay(0);
+      return;
+    }
+    const active = state.myOrders.filter(
+      (o) => ["new", "accepted", "preparing", "ready"].includes(o.status)
+    ).length;
+    updateBadgeDisplay(active);
+  }
+
+  function updateBadgeDisplay(count) {
+    if (count > 0) {
+      els.ordersBadge.textContent = count;
+      els.ordersBadge.hidden = false;
+    } else {
+      els.ordersBadge.hidden = true;
     }
   }
 
@@ -304,6 +354,7 @@
       if (changed) {
         state.myOrders = data;
         renderOrders();
+        updateOrderBadge();
       }
     } catch (_) {
       // silent polling failure
@@ -332,6 +383,7 @@
             if (index >= 0) {
               state.myOrders[index] = updated;
               renderOrders();
+              updateOrderBadge();
             }
           },
         )
@@ -721,6 +773,7 @@
       : "Cart is empty";
     els.mobileCartTotal.textContent = formatTotals(totals);
     els.submitOrder.disabled = !entries.length || state.submitting;
+    els.cartClear.hidden = !entries.length;
 
     if (!entries.length) {
       const empty = document.createElement("div");
@@ -945,9 +998,21 @@
 
   function showOrderSuccess(order, prefix) {
     els.submitNote.textContent = `${prefix}. Order ${order.client_order_id}`;
-    showToast(`Order ${order.client_order_id} placed`);
+    els.successOrderId.textContent = order.client_order_id;
+    els.successOverlay.hidden = false;
     closeCart();
+    refreshIcons();
     telegram && telegram.HapticFeedback && telegram.HapticFeedback.notificationOccurred("success");
+  }
+
+  function closeSuccessModal() {
+    els.successOverlay.hidden = true;
+  }
+
+  function clearCart() {
+    state.cart.clear();
+    renderProducts();
+    renderCart();
   }
 
   function setSubmitting(value) {
